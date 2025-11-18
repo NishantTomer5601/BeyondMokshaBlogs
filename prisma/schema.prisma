@@ -1,0 +1,36 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Blog {
+  id            Int       @id @default(autoincrement())
+  title         String
+  slug          String    @unique
+  authorId      Int?
+  summary       String?
+  tags          String[]
+  contentUrl    String
+  coverImageUrl String?
+  readTime      Int?
+  views         Int       @default(0)
+  likes         Int       @default(0)
+  status        String    @default("draft")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  // Full-text search vector (generated column, managed by PostgreSQL)
+  // This field is auto-updated when title, summary, or tags change
+
+  @@index([slug])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("blogs")
+}
