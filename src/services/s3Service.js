@@ -102,41 +102,41 @@ const fileExists = async (key) => {
 /**
  * Upload blog content file (HTML or Markdown)
  * @param {Buffer} contentBuffer - Content file buffer
- * @param {string} slug - Blog slug
+ * @param {number} blogId - Blog ID
  * @param {string} contentType - text/html or text/markdown
  * @returns {Promise<string>} Public URL of content file
  */
-const uploadBlogContent = async (contentBuffer, slug, contentType) => {
+const uploadBlogContent = async (contentBuffer, blogId, contentType) => {
   const extension = contentType.includes('markdown') ? 'md' : 'html';
-  const key = `blogs/${slug}/content.${extension}`;
+  const key = `blogs/${blogId}/content.${extension}`;
   return await uploadFile(contentBuffer, key, contentType);
 };
 
 /**
  * Upload blog cover image
  * @param {Buffer} imageBuffer - Image file buffer
- * @param {string} slug - Blog slug
+ * @param {number} blogId - Blog ID
  * @param {string} originalName - Original filename
  * @param {string} mimeType - Image MIME type
  * @returns {Promise<string>} Public URL of cover image
  */
-const uploadBlogCoverImage = async (imageBuffer, slug, originalName, mimeType) => {
+const uploadBlogCoverImage = async (imageBuffer, blogId, originalName, mimeType) => {
   const extension = path.extname(originalName);
-  const key = `blogs/${slug}/cover${extension}`;
+  const key = `blogs/${blogId}/cover${extension}`;
   return await uploadFile(imageBuffer, key, mimeType);
 };
 
 /**
  * Delete blog files from S3
- * @param {string} slug - Blog slug
+ * @param {number} blogId - Blog ID
  * @returns {Promise<void>}
  */
-const deleteBlogFiles = async (slug) => {
+const deleteBlogFiles = async (blogId) => {
   try {
     // Try to delete both possible content files
     const contentKeys = [
-      `blogs/${slug}/content.html`,
-      `blogs/${slug}/content.md`,
+      `blogs/${blogId}/content.html`,
+      `blogs/${blogId}/content.md`,
     ];
 
     for (const key of contentKeys) {
@@ -148,15 +148,15 @@ const deleteBlogFiles = async (slug) => {
     // Try to delete cover image (check common extensions)
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
     for (const ext of imageExtensions) {
-      const key = `blogs/${slug}/cover${ext}`;
+      const key = `blogs/${blogId}/cover${ext}`;
       if (await fileExists(key)) {
         await deleteFile(key);
       }
     }
     
-    logger.info(`Deleted all files for blog: ${slug}`);
+    logger.info(`Deleted all files for blog ID: ${blogId}`);
   } catch (error) {
-    logger.error(`Error deleting blog files for ${slug}: ${error.message}`);
+    logger.error(`Error deleting blog files for ID ${blogId}: ${error.message}`);
     // Don't throw - allow operation to continue even if S3 delete fails
   }
 };
@@ -211,11 +211,11 @@ const extractKeyFromUrl = (url) => {
  * Replace blog content file
  * @param {string} oldUrl - Old content URL
  * @param {Buffer} newContentBuffer - New content buffer
- * @param {string} slug - Blog slug
+ * @param {number} blogId - Blog ID
  * @param {string} contentType - Content MIME type
  * @returns {Promise<string>} New content URL
  */
-const replaceBlogContent = async (oldUrl, newContentBuffer, slug, contentType) => {
+const replaceBlogContent = async (oldUrl, newContentBuffer, blogId, contentType) => {
   // Delete old file if it exists
   const oldKey = extractKeyFromUrl(oldUrl);
   if (oldKey && await fileExists(oldKey)) {
@@ -223,19 +223,19 @@ const replaceBlogContent = async (oldUrl, newContentBuffer, slug, contentType) =
   }
   
   // Upload new file
-  return await uploadBlogContent(newContentBuffer, slug, contentType);
+  return await uploadBlogContent(newContentBuffer, blogId, contentType);
 };
 
 /**
  * Replace blog cover image
  * @param {string} oldUrl - Old image URL
  * @param {Buffer} newImageBuffer - New image buffer
- * @param {string} slug - Blog slug
+ * @param {number} blogId - Blog ID
  * @param {string} originalName - Original filename
  * @param {string} mimeType - Image MIME type
  * @returns {Promise<string>} New image URL
  */
-const replaceBlogCoverImage = async (oldUrl, newImageBuffer, slug, originalName, mimeType) => {
+const replaceBlogCoverImage = async (oldUrl, newImageBuffer, blogId, originalName, mimeType) => {
   // Delete old file if it exists
   const oldKey = extractKeyFromUrl(oldUrl);
   if (oldKey && await fileExists(oldKey)) {
@@ -243,7 +243,7 @@ const replaceBlogCoverImage = async (oldUrl, newImageBuffer, slug, originalName,
   }
   
   // Upload new file
-  return await uploadBlogCoverImage(newImageBuffer, slug, originalName, mimeType);
+  return await uploadBlogCoverImage(newImageBuffer, blogId, originalName, mimeType);
 };
 
 module.exports = {

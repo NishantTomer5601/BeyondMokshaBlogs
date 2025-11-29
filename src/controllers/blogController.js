@@ -18,7 +18,7 @@ const logger = require('../utils/logger');
 
 /**
  * Get paginated list of blogs
- * GET /api/blogs?page=1&limit=20&tags=tag1,tag2&search=query&status=published
+ * GET /api/blogs?page=1&limit=20&tags=tag1,tag2&search=query
  */
 const getBlogs = async (req, res) => {
   try {
@@ -26,7 +26,6 @@ const getBlogs = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
     const search = req.query.search;
-    const status = req.query.status || 'published';
 
     // Parse tags - can be comma-separated string or array
     let tags = req.query.tags;
@@ -39,7 +38,6 @@ const getBlogs = async (req, res) => {
     // Build where clause
     const where = {
       deletedAt: null,
-      status,
     };
 
     // Add tags filter if provided
@@ -53,7 +51,6 @@ const getBlogs = async (req, res) => {
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
-        { summary: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -64,16 +61,12 @@ const getBlogs = async (req, res) => {
         select: {
           id: true,
           title: true,
-          slug: true,
-          authorId: true,
-          summary: true,
           tags: true,
           contentUrl: true,
           coverImageUrl: true,
           readTime: true,
           views: true,
           likes: true,
-          status: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -110,16 +103,16 @@ const getBlogs = async (req, res) => {
 };
 
 /**
- * Get single blog by slug
- * GET /api/blogs/:slug
+ * Get single blog by ID
+ * GET /api/blogs/:id
  */
-const getBlogBySlug = async (req, res) => {
+const getBlogById = async (req, res) => {
   try {
-    const { slug } = req.params;
+    const blogId = parseInt(req.params.id);
 
     const blog = await prisma.blog.findUnique({
       where: { 
-        slug,
+        id: blogId,
       },
     });
 
@@ -154,7 +147,7 @@ const getBlogBySlug = async (req, res) => {
  * Create a new blog
  * POST /api/blogs
  * Expects multipart/form-data with:
- * - metadata fields (title, slug, summary, tags, etc.)
+ * - metadata fields (title, tags, readTime, etc.)
  * - content file (HTML or Markdown)
  * - cover image file (optional)
  */
@@ -162,57 +155,13 @@ const createBlog = async (req, res) => {
   try {
     const {
       title,
-      slug,
-      authorId,
-      summary,
       tags,
       readTime,
-      status = 'draft',
     } = req.body;
-
-    // Check if slug already exists
-    const existingBlog = await prisma.blog.findUnique({
-      where: { slug },
-    });
-
-    if (existingBlog) {
-      return res.status(409).json({
-        success: false,
-        message: 'A blog with this slug already exists',
-      });
-    }
 
     // Get uploaded files
     const contentFile = req.files.content[0];
     const coverFile = req.files.cover ? req.files.cover[0] : null;
-
-    // Sanitize HTML content before uploading to S3
-    logger.info(`Sanitizing HTML content for blog: ${slug}`);
-    const sanitizedBuffer = sanitizeHTMLToBuffer(contentFile.buffer);
-    
-    // Validate HTML structure
-    const validation = validateHTMLStructure(sanitizedBuffer.toString());
-    if (validation.warnings.length > 0) {
-      logger.warn(`HTML validation warnings for ${slug}: ${validation.warnings.join(', ')}`);
-    }
-
-    // Upload content to S3
-    const contentUrl = await uploadBlogContent(
-      sanitizedBuffer,
-      slug,
-      contentFile.mimetype
-    );
-
-    // Upload cover image to S3 if provided
-    let coverImageUrl = null;
-    if (coverFile) {
-      coverImageUrl = await uploadBlogCoverImage(
-        coverFile.buffer,
-        slug,
-        coverFile.originalname,
-        coverFile.mimetype
-      );
-    }
 
     // Parse tags
     let parsedTags = [];
@@ -237,25 +186,58 @@ const createBlog = async (req, res) => {
       }
     }
 
-    // Create blog in database
+    // Create blog in database first to get ID
     const blog = await prisma.blog.create({
       data: {
         title,
-        slug,
-        authorId: authorId ? parseInt(authorId) : null,
-        summary: summary || null,
         tags: parsedTags,
+        contentUrl: 'placeholder', // Temporary
+        coverImageUrl: null,
+        readTime: readTime ? parseInt(readTime) : null,
+      },
+    });
+
+    // Sanitize HTML content before uploading to S3
+    logger.info(`Sanitizing HTML content for blog ID: ${blog.id}`);
+    const sanitizedBuffer = sanitizeHTMLToBuffer(contentFile.buffer);
+    
+    // Validate HTML structure
+    const validation = validateHTMLStructure(sanitizedBuffer.toString());
+    if (validation.warnings.length > 0) {
+      logger.warn(`HTML validation warnings for blog ${blog.id}: ${validation.warnings.join(', ')}`);
+    }
+
+    // Upload content to S3 using blog ID
+    const contentUrl = await uploadBlogContent(
+      sanitizedBuffer,
+      blog.id,
+      contentFile.mimetype
+    );
+
+    // Upload cover image to S3 if provided
+    let coverImageUrl = null;
+    if (coverFile) {
+      coverImageUrl = await uploadBlogCoverImage(
+        coverFile.buffer,
+        blog.id,
+        coverFile.originalname,
+        coverFile.mimetype
+      );
+    }
+
+    // Update blog with S3 URLs
+    const updatedBlog = await prisma.blog.update({
+      where: { id: blog.id },
+      data: {
         contentUrl,
         coverImageUrl,
-        readTime: readTime ? parseInt(readTime) : null,
-        status,
       },
     });
 
     res.status(201).json({
       success: true,
       message: 'Blog created successfully',
-      data: blog,
+      data: updatedBlog,
     });
   } catch (error) {
     logger.error(`Create blog error: ${error.message}`, { error: error.stack });
@@ -278,12 +260,8 @@ const updateBlog = async (req, res) => {
     
     const {
       title,
-      slug,
-      authorId,
-      summary,
       tags,
       readTime,
-      status,
       views,
       likes,
     } = req.body;
@@ -300,29 +278,11 @@ const updateBlog = async (req, res) => {
       });
     }
 
-    // If slug is being changed, check for conflicts
-    if (slug && slug !== existingBlog.slug) {
-      const slugExists = await prisma.blog.findUnique({
-        where: { slug },
-      });
-
-      if (slugExists) {
-        return res.status(409).json({
-          success: false,
-          message: 'A blog with this slug already exists',
-        });
-      }
-    }
-
     // Prepare update data
     const updateData = {};
 
     if (title) updateData.title = title;
-    if (slug) updateData.slug = slug;
-    if (authorId !== undefined) updateData.authorId = authorId ? parseInt(authorId) : null;
-    if (summary !== undefined) updateData.summary = summary || null;
     if (readTime !== undefined) updateData.readTime = readTime ? parseInt(readTime) : null;
-    if (status) updateData.status = status;
     if (views !== undefined) updateData.views = parseInt(views);
     if (likes !== undefined) updateData.likes = parseInt(likes);
 
@@ -340,19 +300,16 @@ const updateBlog = async (req, res) => {
       const contentFile = req.files.content ? req.files.content[0] : null;
       const coverFile = req.files.cover ? req.files.cover[0] : null;
 
-      // Use the new slug if provided, otherwise use existing slug
-      const targetSlug = slug || existingBlog.slug;
-
       // Replace content file if provided
       if (contentFile) {
         // Sanitize HTML content
-        logger.info(`Sanitizing updated HTML content for blog: ${targetSlug}`);
+        logger.info(`Sanitizing updated HTML content for blog ID: ${blogId}`);
         const sanitizedBuffer = sanitizeHTMLToBuffer(contentFile.buffer);
         
         const newContentUrl = await replaceBlogContent(
           existingBlog.contentUrl,
           sanitizedBuffer,
-          targetSlug,
+          blogId,
           contentFile.mimetype
         );
         updateData.contentUrl = newContentUrl;
@@ -363,7 +320,7 @@ const updateBlog = async (req, res) => {
         const newCoverUrl = await replaceBlogCoverImage(
           existingBlog.coverImageUrl,
           coverFile.buffer,
-          targetSlug,
+          blogId,
           coverFile.originalname,
           coverFile.mimetype
         );
@@ -452,8 +409,8 @@ const permanentDeleteBlog = async (req, res) => {
       });
     }
 
-    // Delete files from S3
-    await deleteBlogFiles(blog.slug);
+    // Delete files from S3 using blog ID
+    await deleteBlogFiles(blogId);
 
     // Delete from database
     await prisma.blog.delete({
@@ -533,16 +490,16 @@ const searchBlogsController = async (req, res) => {
 
 /**
  * Get blog content with HTML
- * GET /api/blogs/:slug/content
+ * GET /api/blogs/:id/content
  * Returns blog metadata along with the actual HTML content from S3
  */
 const getBlogContent = async (req, res) => {
   try {
-    const { slug } = req.params;
+    const blogId = parseInt(req.params.id);
 
     // Get blog metadata
     const blog = await prisma.blog.findUnique({
-      where: { slug },
+      where: { id: blogId },
     });
 
     if (!blog || blog.deletedAt) {
@@ -600,15 +557,11 @@ const getBlogContent = async (req, res) => {
       data: {
         id: blog.id,
         title: blog.title,
-        slug: blog.slug,
-        authorId: blog.authorId,
-        summary: blog.summary,
         tags: blog.tags,
         coverImageUrl: presignedCoverUrl, // Presigned URL for cover image
         readTime: blog.readTime,
         views: blog.views + 1, // Return incremented count
         likes: blog.likes,
-        status: blog.status,
         createdAt: blog.createdAt,
         updatedAt: blog.updatedAt,
         content: htmlContent, // The actual HTML content from S3
@@ -625,7 +578,7 @@ const getBlogContent = async (req, res) => {
 };
 
 /**
- * Get latest blogs (most recently published)
+ * Get latest blogs (most recently created)
  * GET /api/blogs/feed/latest?limit=10
  */
 const getLatestBlogs = async (req, res) => {
@@ -644,7 +597,6 @@ const getLatestBlogs = async (req, res) => {
 
     const latestBlogs = await prisma.blog.findMany({
       where: {
-        status: 'published',
         deletedAt: null,
       },
       orderBy: {
@@ -654,16 +606,12 @@ const getLatestBlogs = async (req, res) => {
       select: {
         id: true,
         title: true,
-        slug: true,
-        authorId: true,
-        summary: true,
         tags: true,
         contentUrl: true,
         coverImageUrl: true,
         readTime: true,
         views: true,
         likes: true,
-        status: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -726,7 +674,6 @@ const getPopularBlogs = async (req, res) => {
 
     const popularBlogs = await prisma.blog.findMany({
       where: {
-        status: 'published',
         deletedAt: null,
       },
       orderBy: {
@@ -736,16 +683,12 @@ const getPopularBlogs = async (req, res) => {
       select: {
         id: true,
         title: true,
-        slug: true,
-        authorId: true,
-        summary: true,
         tags: true,
         contentUrl: true,
         coverImageUrl: true,
         readTime: true,
         views: true,
         likes: true,
-        status: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -790,7 +733,7 @@ const getPopularBlogs = async (req, res) => {
 
 module.exports = {
   getBlogs,
-  getBlogBySlug,
+  getBlogById,
   createBlog,
   updateBlog,
   deleteBlog,

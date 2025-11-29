@@ -35,21 +35,6 @@ const validateCreateBlog = [
     .notEmpty().withMessage('Title is required')
     .isLength({ min: 3, max: 200 }).withMessage('Title must be between 3 and 200 characters'),
   
-  body('slug')
-    .trim()
-    .notEmpty().withMessage('Slug is required')
-    .matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).withMessage('Slug must be lowercase, alphanumeric with hyphens only')
-    .isLength({ min: 3, max: 200 }).withMessage('Slug must be between 3 and 200 characters'),
-  
-  body('authorId')
-    .optional()
-    .isInt({ min: 1 }).withMessage('Author ID must be a positive integer'),
-  
-  body('summary')
-    .optional()
-    .trim()
-    .isLength({ max: 500 }).withMessage('Summary cannot exceed 500 characters'),
-  
   body('tags')
     .optional({ values: 'falsy' })
     .customSanitizer((value) => {
@@ -119,10 +104,6 @@ const validateCreateBlog = [
     .optional()
     .isInt({ min: 1 }).withMessage('Read time must be a positive integer'),
   
-  body('status')
-    .optional()
-    .isIn(['draft', 'published', 'archived']).withMessage('Status must be draft, published, or archived'),
-  
   handleValidationErrors,
 ];
 
@@ -137,21 +118,6 @@ const validateUpdateBlog = [
     .optional()
     .trim()
     .isLength({ min: 3, max: 200 }).withMessage('Title must be between 3 and 200 characters'),
-  
-  body('slug')
-    .optional()
-    .trim()
-    .matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).withMessage('Slug must be lowercase, alphanumeric with hyphens only')
-    .isLength({ min: 3, max: 200 }).withMessage('Slug must be between 3 and 200 characters'),
-  
-  body('authorId')
-    .optional()
-    .isInt({ min: 1 }).withMessage('Author ID must be a positive integer'),
-  
-  body('summary')
-    .optional()
-    .trim()
-    .isLength({ max: 500 }).withMessage('Summary cannot exceed 500 characters'),
   
   body('tags')
     .optional()
@@ -172,10 +138,6 @@ const validateUpdateBlog = [
     .optional()
     .isInt({ min: 1 }).withMessage('Read time must be a positive integer'),
   
-  body('status')
-    .optional()
-    .isIn(['draft', 'published', 'archived']).withMessage('Status must be draft, published, or archived'),
-  
   body('views')
     .optional()
     .isInt({ min: 0 }).withMessage('Views must be a non-negative integer'),
@@ -193,18 +155,6 @@ const validateUpdateBlog = [
 const validateBlogId = [
   param('id')
     .isInt({ min: 1 }).withMessage('Blog ID must be a positive integer'),
-  
-  handleValidationErrors,
-];
-
-/**
- * Validation rules for blog slug parameter
- */
-const validateBlogSlug = [
-  param('slug')
-    .trim()
-    .notEmpty().withMessage('Slug is required')
-    .matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).withMessage('Invalid slug format'),
   
   handleValidationErrors,
 ];
@@ -240,10 +190,6 @@ const validateBlogListQuery = [
     .optional()
     .trim()
     .isLength({ min: 2, max: 200 }).withMessage('Search query must be between 2 and 200 characters'),
-  
-  query('status')
-    .optional()
-    .isIn(['draft', 'published', 'archived']).withMessage('Status must be draft, published, or archived'),
   
   handleValidationErrors,
 ];
@@ -328,7 +274,6 @@ module.exports = {
   validateCreateBlog,
   validateUpdateBlog,
   validateBlogId,
-  validateBlogSlug,
   validateBlogListQuery,
   validateSearchQuery,
   validateFileUpload,

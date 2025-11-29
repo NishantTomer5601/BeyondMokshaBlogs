@@ -13,24 +13,18 @@ datasource db {
 model Blog {
   id            Int       @id @default(autoincrement())
   title         String
-  slug          String    @unique
-  authorId      Int?
-  summary       String?
-  tags          String[]
+  tags          String[]  @default([])
   contentUrl    String
   coverImageUrl String?
   readTime      Int?
   views         Int       @default(0)
   likes         Int       @default(0)
-  status        String    @default("draft")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
   // Full-text search vector (generated column, managed by PostgreSQL)
-  // This field is auto-updated when title, summary, or tags change
+  // This field is auto-updated when title and tags change
 
-  @@index([slug])
-  @@index([status])
   @@index([deletedAt])
   @@map("blogs")
 }

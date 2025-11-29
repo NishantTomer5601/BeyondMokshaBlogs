@@ -8,7 +8,7 @@ const logger = require('./logger');
 
 /**
  * Perform full-text search on blogs
- * Searches across title, summary, and tags using PostgreSQL's built-in full-text search
+ * Searches across title and tags using PostgreSQL's built-in full-text search
  * 
  * @param {string} searchQuery - User's search query
  * @param {number} limit - Maximum results to return
@@ -26,29 +26,24 @@ const searchBlogs = async (searchQuery, limit = 20, offset = 0) => {
 
     // SQL query for full-text search with ranking
     // Uses the immutable function blogs_search_text() for better performance
-    // Only searches published blogs by default
+    // Searches all blogs (no status filter)
     const searchSQL = `
       SELECT 
         id,
         title,
-        slug,
-        "authorId",
-        summary,
         tags,
         "contentUrl",
         "coverImageUrl",
         "readTime",
         views,
         likes,
-        status,
         "createdAt",
         "updatedAt",
-        ts_rank(blogs_search_text(title, summary, tags), plainto_tsquery('english', $1)) AS rank
+        ts_rank(blogs_search_text(title, tags), plainto_tsquery('english', $1)) AS rank
       FROM blogs
       WHERE 
         "deletedAt" IS NULL
-        AND status = 'published'
-        AND blogs_search_text(title, summary, tags) @@ plainto_tsquery('english', $1)
+        AND blogs_search_text(title, tags) @@ plainto_tsquery('english', $1)
       ORDER BY rank DESC, "createdAt" DESC
       LIMIT $2 OFFSET $3
     `;
@@ -59,8 +54,7 @@ const searchBlogs = async (searchQuery, limit = 20, offset = 0) => {
       FROM blogs
       WHERE 
         "deletedAt" IS NULL
-        AND status = 'published'
-        AND blogs_search_text(title, summary, tags) @@ plainto_tsquery('english', $1)
+        AND blogs_search_text(title, tags) @@ plainto_tsquery('english', $1)
     `;
 
     // Execute both queries
@@ -93,7 +87,6 @@ const searchBlogs = async (searchQuery, limit = 20, offset = 0) => {
  * @param {Object} options - Search options
  * @param {string} options.query - Search query
  * @param {string[]} options.tags - Filter by tags
- * @param {string} options.status - Filter by status
  * @param {number} options.limit - Results limit
  * @param {number} options.offset - Results offset
  * @returns {Promise<Object>} Search results
@@ -102,7 +95,6 @@ const advancedSearchBlogs = async (options) => {
   const {
     query: searchQuery,
     tags = [],
-    status = 'published',
     limit = 20,
     offset = 0,
   } = options;
@@ -115,15 +107,8 @@ const advancedSearchBlogs = async (options) => {
     // Add full-text search condition
     if (searchQuery && searchQuery.trim()) {
       paramCount++;
-      conditions.push(`blogs_search_text(title, summary, tags) @@ plainto_tsquery('english', $${paramCount})`);
+      conditions.push(`blogs_search_text(title, tags) @@ plainto_tsquery('english', $${paramCount})`);
       params.push(searchQuery.trim());
-    }
-
-    // Add status filter
-    if (status) {
-      paramCount++;
-      conditions.push(`status = $${paramCount}`);
-      params.push(status);
     }
 
     // Add tags filter (blog must have at least one of the specified tags)
@@ -140,19 +125,15 @@ const advancedSearchBlogs = async (options) => {
       SELECT 
         id,
         title,
-        slug,
-        "authorId",
-        summary,
         tags,
         "contentUrl",
         "coverImageUrl",
         "readTime",
         views,
         likes,
-        status,
         "createdAt",
         "updatedAt"
-        ${searchQuery ? `, ts_rank(blogs_search_text(title, summary, tags), plainto_tsquery('english', $1)) AS rank` : ''}
+        ${searchQuery ? `, ts_rank(blogs_search_text(title, tags), plainto_tsquery('english', $1)) AS rank` : ''}
       FROM blogs
       WHERE ${whereClause}
       ORDER BY ${searchQuery ? 'rank DESC,' : ''} "createdAt" DESC
