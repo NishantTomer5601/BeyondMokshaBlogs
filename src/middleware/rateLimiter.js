@@ -11,7 +11,7 @@ const logger = require('../utils/logger');
  * Allows generous access for legitimate users while preventing abuse
  * 
  * Limit: 100 requests per 15 minutes per IP
- * Use case: GET /api/blogs, GET /api/blogs/:slug, etc.
+ * Use case: GET /api/blogs, GET /api/blogs/:id, etc.
  */
 const publicReadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

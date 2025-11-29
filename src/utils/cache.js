@@ -127,11 +127,11 @@ const getBlogListCacheKey = (params) => {
 
 /**
  * Generate cache key for single blog
- * @param {string} slug - Blog slug
+ * @param {number} id - Blog ID
  * @returns {string} Cache key
  */
-const getBlogCacheKey = (slug) => {
-  return `blog:${slug}`;
+const getBlogCacheKey = (id) => {
+  return `blog:${id}`;
 };
 
 /**
