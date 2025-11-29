@@ -1,6 +1,7 @@
 /**
  * Express Server
  * Main application entry point
+ * Updated: Schema migration to remove slug, authorId, summary, status fields
  */
 
 require('dotenv').config();
