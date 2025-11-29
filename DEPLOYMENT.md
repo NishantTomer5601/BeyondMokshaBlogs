@@ -83,84 +83,9 @@ module.exports = {
 };
 ```
 
-### 2. Using Docker
+## Deployment Methods
 
-**Dockerfile:**
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-COPY prisma ./prisma/
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Generate Prisma Client
-RUN npx prisma generate
-
-# Copy source code
-COPY . .
-
-# Expose port
-EXPOSE 5000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:5000/health')"
-
-# Start application
-CMD ["npm", "start"]
-```
-
-**docker-compose.yml:**
-```yaml
-version: '3.8'
-
-services:
-  api:
-    build: .
-    ports:
-      - "5000:5000"
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
-      - S3_BUCKET=${S3_BUCKET}
-      - REDIS_URL=redis://redis:6379
-      - REDIS_ENABLED=true
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=beyondmoksha_blogs
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-### 3. Using Systemd (Linux)
+### 1. Using Systemd (Linux)
 
 Create `/etc/systemd/system/beyondmoksha-api.service`:
 
@@ -265,9 +190,6 @@ pm2 logs
 
 # Using systemd
 journalctl -u beyondmoksha-api -f
-
-# Using Docker
-docker-compose logs -f api
 ```
 
 ### Performance Monitoring
