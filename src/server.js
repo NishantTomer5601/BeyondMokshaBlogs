@@ -128,6 +128,9 @@ app.get('/health', healthCheckLimiter, async (req, res) => {
 // Blog routes
 app.use(`${API_PREFIX}/blogs`, blogRoutes);
 
+// Frontend compatibility alias (for routes like /blogs/30)
+app.use('/blogs', blogRoutes);
+
 // ===========================
 // TEMPORARILY DISABLED: Search endpoint
 // Uncomment when ready to test search functionality
