@@ -81,9 +81,34 @@ const getBlogs = async (req, res) => {
 
     const totalPages = Math.ceil(total / limit);
 
+    // Generate presigned URLs for all blogs with S3 content
+    const blogsWithPresignedUrls = await Promise.all(
+      blogs.map(async (blog) => {
+        try {
+          const enhancedBlog = { ...blog };
+          
+          // Generate presigned URL for content if it exists and is an S3 URL
+          if (blog.contentUrl && blog.contentUrl.startsWith('s3://')) {
+            enhancedBlog.presignedContentUrl = await generatePresignedUrl(blog.contentUrl);
+          }
+
+          // Generate presigned URL for cover image if it exists and is an S3 URL
+          if (blog.coverImageUrl && blog.coverImageUrl.startsWith('s3://')) {
+            enhancedBlog.presignedCoverUrl = await generatePresignedUrl(blog.coverImageUrl);
+          }
+
+          return enhancedBlog;
+        } catch (urlError) {
+          logger.warn(`Failed to generate presigned URLs for blog ${blog.id}: ${urlError.message}`);
+          // Return original blog without presigned URLs
+          return blog;
+        }
+      })
+    );
+
     res.status(200).json({
       success: true,
-      data: blogs,
+      data: blogsWithPresignedUrls,
       pagination: {
         total,
         page,
@@ -129,9 +154,27 @@ const getBlogById = async (req, res) => {
       data: { views: { increment: 1 } },
     }).catch(err => logger.error(`Failed to increment views: ${err.message}`));
 
+    // Generate presigned URLs for S3 content (if they exist)
+    let responseData = { ...blog };
+    
+    try {
+      // Generate presigned URL for content if it exists and is an S3 URL
+      if (blog.contentUrl && blog.contentUrl.startsWith('s3://')) {
+        responseData.presignedContentUrl = await generatePresignedUrl(blog.contentUrl);
+      }
+
+      // Generate presigned URL for cover image if it exists and is an S3 URL
+      if (blog.coverImageUrl && blog.coverImageUrl.startsWith('s3://')) {
+        responseData.presignedCoverUrl = await generatePresignedUrl(blog.coverImageUrl);
+      }
+    } catch (urlError) {
+      logger.warn(`Failed to generate presigned URLs for blog ${blogId}: ${urlError.message}`);
+      // Continue without presigned URLs - the frontend can handle S3 URIs
+    }
+
     res.status(200).json({
       success: true,
-      data: blog,
+      data: responseData,
     });
   } catch (error) {
     logger.error(`Get blog error: ${error.message}`, { error: error.stack });
